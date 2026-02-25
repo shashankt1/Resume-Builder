@@ -91,3 +91,5 @@ craftlycv/frontend/node_modules/@next/swc-linux-arm64-gnu/next-swc.linux-arm64-g
 # Environment files
 *.env
 *.env.*
+craftlycv/node_modules/@next/swc-linux-arm64-musl/next-swc.linux-arm64-musl.node
+craftlycv/node_modules/@next/swc-linux-arm64-gnu/next-swc.linux-arm64-gnu.node
