@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import crypto from 'crypto'
 
-// Lazy initialization of Razorpay client
 let razorpayInstance: any = null
 
 async function getRazorpayInstance() {
@@ -13,12 +11,10 @@ async function getRazorpayInstance() {
       throw new Error('NEXT_PUBLIC_RAZORPAY_KEY_ID is not configured')
     }
     
-    // Dynamic import to avoid build-time issues
     const Razorpay = (await import('razorpay')).default
-    
     razorpayInstance = new Razorpay({
       key_id: keyId,
-      key_secret: keySecret || '', // Will work for order creation, but verification needs the secret
+      key_secret: keySecret || '',
     })
   }
   return razorpayInstance
@@ -27,32 +23,26 @@ async function getRazorpayInstance() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { amount, currency = 'INR', userId, planId } = body
+    const { amount, userId, planId, isYearly } = body
 
     if (!amount || amount < 100) {
-      return NextResponse.json(
-        { error: 'Amount must be at least 100 paise (1 INR)' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Amount must be at least 100 paise' }, { status: 400 })
     }
 
     if (!userId) {
-      return NextResponse.json(
-        { error: 'User ID is required' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'User ID is required' }, { status: 400 })
     }
 
     const razorpay = await getRazorpayInstance()
 
-    // Create order with Razorpay
     const order = await razorpay.orders.create({
-      amount: amount, // Amount in paise
-      currency: currency,
-      receipt: `receipt_${userId}_${Date.now()}`.substring(0, 40), // Max 40 chars
+      amount: amount,
+      currency: 'INR',
+      receipt: `rcpt_${userId}_${Date.now()}`.substring(0, 40),
       notes: {
-        userId: userId,
-        planId: planId || 'credits',
+        userId,
+        planId: planId || 'scans',
+        isYearly: isYearly ? 'true' : 'false',
       },
     })
 

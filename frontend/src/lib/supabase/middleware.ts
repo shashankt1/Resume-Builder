@@ -33,7 +33,6 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  // Refresh the auth token
   await supabase.auth.getUser()
 
   return response

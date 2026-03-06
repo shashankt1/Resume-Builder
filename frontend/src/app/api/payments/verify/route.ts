@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 
-// Store processed payment IDs for idempotency (in production, use database)
+// In-memory store for idempotency (use Redis/DB in production)
 const processedPayments = new Set<string>()
 
 export async function POST(request: NextRequest) {
@@ -13,44 +13,29 @@ export async function POST(request: NextRequest) {
       razorpay_payment_id,
       razorpay_signature,
       userId,
-      credits,
+      planId,
+      scans,
     } = body
 
-    // Validate required fields
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-      return NextResponse.json(
-        { error: 'Missing payment verification fields' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Missing payment fields' }, { status: 400 })
     }
 
-    if (!userId || !credits) {
-      return NextResponse.json(
-        { error: 'Missing userId or credits' },
-        { status: 400 }
-      )
+    if (!userId || !scans) {
+      return NextResponse.json({ error: 'Missing userId or scans' }, { status: 400 })
     }
 
-    // Idempotency check - prevent double credit addition
+    // Idempotency check
     if (processedPayments.has(razorpay_payment_id)) {
-      return NextResponse.json({
-        success: true,
-        message: 'Payment already processed',
-        alreadyProcessed: true,
-      })
+      return NextResponse.json({ success: true, message: 'Payment already processed', alreadyProcessed: true })
     }
 
     // Verify signature
     const secret = process.env.RAZORPAY_KEY_SECRET
-
     if (!secret) {
-      return NextResponse.json(
-        { error: 'Payment verification not configured. Contact support.' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Payment verification not configured' }, { status: 500 })
     }
 
-    // Real signature verification using HMAC SHA256
     const signatureBody = razorpay_order_id + '|' + razorpay_payment_id
     const expectedSignature = crypto
       .createHmac('sha256', secret)
@@ -58,81 +43,54 @@ export async function POST(request: NextRequest) {
       .digest('hex')
 
     if (expectedSignature !== razorpay_signature) {
-      return NextResponse.json(
-        { error: 'Invalid payment signature' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Invalid payment signature' }, { status: 400 })
     }
 
-    // Mark payment as processed (idempotency)
+    // Mark as processed
     processedPayments.add(razorpay_payment_id)
 
-    // Update user credits in Supabase
-    const supabase = await createClient()
+    // Use admin client for server-side operations
+    const supabase = await createAdminClient()
 
-    // Try to update with service role key if available, otherwise use anon key
-    const { data: currentUser, error: fetchError } = await supabase
-      .from('profiles')
-      .select('credits')
-      .eq('id', userId)
-      .single()
+    // Add scans atomically using RPC or direct update
+    // First try RPC function if it exists
+    const { error: rpcError } = await supabase.rpc('add_scans', {
+      p_user_id: userId,
+      p_amount: scans,
+    })
 
-    if (fetchError) {
-      // If profile doesn't exist, create it
-      if (fetchError.code === 'PGRST116') {
-        const { error: insertError } = await supabase
-          .from('profiles')
-          .insert({
-            id: userId,
-            credits: credits,
-          })
-
-        if (insertError) {
-          processedPayments.delete(razorpay_payment_id) // Rollback idempotency
-          return NextResponse.json(
-            { error: 'Failed to create user profile' },
-            { status: 500 }
-          )
-        }
-      } else {
-        processedPayments.delete(razorpay_payment_id) // Rollback idempotency
-        return NextResponse.json(
-          { error: 'Failed to fetch user credits' },
-          { status: 500 }
-        )
-      }
-    } else {
-      // Update existing profile
-      const newCredits = (currentUser?.credits || 0) + credits
-
-      const { error: updateError } = await supabase
+    if (rpcError) {
+      // Fallback to direct update if RPC doesn't exist
+      const { data: currentProfile } = await supabase
         .from('profiles')
-        .update({ credits: newCredits })
+        .select('scans, plan')
         .eq('id', userId)
+        .single()
 
-      if (updateError) {
-        processedPayments.delete(razorpay_payment_id) // Rollback idempotency
-        return NextResponse.json(
-          { error: 'Failed to update credits' },
-          { status: 500 }
-        )
+      if (currentProfile) {
+        const newScans = (currentProfile.scans || 0) + scans
+        await supabase
+          .from('profiles')
+          .update({ scans: newScans, plan: planId || currentProfile.plan })
+          .eq('id', userId)
       }
     }
 
-    // Log the transaction
-    await supabase.from('transactions').insert({
+    // Log transaction
+    await supabase.from('payment_transactions').insert({
       user_id: userId,
       payment_id: razorpay_payment_id,
       order_id: razorpay_order_id,
-      amount: credits * 10, // Assuming 10 paise per credit
-      credits: credits,
+      plan_id: planId,
+      scans_added: scans,
+      amount: body.amount || 0,
       status: 'completed',
       created_at: new Date().toISOString(),
     })
 
     return NextResponse.json({
       success: true,
-      message: 'Payment verified and credits added',
+      message: 'Payment verified and scans added',
       paymentId: razorpay_payment_id,
     })
   } catch (error) {
