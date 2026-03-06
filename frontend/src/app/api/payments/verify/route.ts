@@ -44,31 +44,24 @@ export async function POST(request: NextRequest) {
     const secret = process.env.RAZORPAY_KEY_SECRET
 
     if (!secret) {
-      // TODO: Add RAZORPAY_KEY_SECRET to environment variables in Vercel dashboard
-      // Once added, this verification will work automatically.
-      // For now, we'll log a warning and proceed (NOT PRODUCTION SAFE)
-      // In production, uncomment the return statement below:
-      // return NextResponse.json(
-      //   { error: 'Payment verification not configured. Contact support.' },
-      //   { status: 500 }
-      // )
-      
-      // MOCKED VERIFICATION - REMOVE IN PRODUCTION
-      // This allows testing the flow without the secret key
-    } else {
-      // Real signature verification
-      const body = razorpay_order_id + '|' + razorpay_payment_id
-      const expectedSignature = crypto
-        .createHmac('sha256', secret)
-        .update(body)
-        .digest('hex')
+      return NextResponse.json(
+        { error: 'Payment verification not configured. Contact support.' },
+        { status: 500 }
+      )
+    }
 
-      if (expectedSignature !== razorpay_signature) {
-        return NextResponse.json(
-          { error: 'Invalid payment signature' },
-          { status: 400 }
-        )
-      }
+    // Real signature verification using HMAC SHA256
+    const signatureBody = razorpay_order_id + '|' + razorpay_payment_id
+    const expectedSignature = crypto
+      .createHmac('sha256', secret)
+      .update(signatureBody)
+      .digest('hex')
+
+    if (expectedSignature !== razorpay_signature) {
+      return NextResponse.json(
+        { error: 'Invalid payment signature' },
+        { status: 400 }
+      )
     }
 
     // Mark payment as processed (idempotency)
