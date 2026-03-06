@@ -25,7 +25,7 @@ export interface ATSAnalysisResult {
 
 export async function analyzeResumeATS(resumeText: string): Promise<ATSAnalysisResult> {
   const genAI = getGenAI()
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
 
   const prompt = `You are an expert ATS (Applicant Tracking System) analyzer. Analyze the following resume and provide a detailed assessment.
 
@@ -46,16 +46,17 @@ Respond ONLY with valid JSON, no markdown or explanation.`
     const result = await model.generateContent(prompt)
     const response = result.response
     const text = response.text()
-    
-    // Extract JSON from response
-    const jsonMatch = text.match(/\{[\s\S]*\}/)
+
+    // Strip markdown code fences if present
+    const clean = text.replace(/```json\n?|\n?```/g, '').trim()
+
+    const jsonMatch = clean.match(/\{[\s\S]*\}/)
     if (!jsonMatch) {
       throw new Error('Failed to parse AI response')
     }
-    
+
     const parsed = JSON.parse(jsonMatch[0])
-    
-    // Ensure all fields exist with defaults
+
     return {
       score: parsed.score || 50,
       keywordMatches: parsed.keywordMatches || [],
@@ -82,7 +83,7 @@ export async function generateInterviewQuestions(
   }>
 }> {
   const genAI = getGenAI()
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
 
   const prompt = `Based on this resume${jobTitle ? ` for a ${jobTitle} position` : ''}, generate ${count} interview questions.
 
@@ -107,12 +108,11 @@ Respond ONLY with valid JSON.`
     const result = await model.generateContent(prompt)
     const response = result.response
     const text = response.text()
-    
-    const jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) {
-      throw new Error('Failed to parse AI response')
-    }
-    
+
+    const clean = text.replace(/```json\n?|\n?```/g, '').trim()
+    const jsonMatch = clean.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) throw new Error('Failed to parse AI response')
+
     return JSON.parse(jsonMatch[0])
   } catch (error) {
     throw new Error(`Interview questions generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
@@ -128,7 +128,7 @@ export async function tailorResumeToJob(
   matchScore: number
 }> {
   const genAI = getGenAI()
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
 
   const prompt = `You are an expert resume writer. Tailor this resume to match the job description while keeping it authentic and ATS-friendly.
 
@@ -149,12 +149,11 @@ Respond ONLY with valid JSON.`
     const result = await model.generateContent(prompt)
     const response = result.response
     const text = response.text()
-    
-    const jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) {
-      throw new Error('Failed to parse AI response')
-    }
-    
+
+    const clean = text.replace(/```json\n?|\n?```/g, '').trim()
+    const jsonMatch = clean.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) throw new Error('Failed to parse AI response')
+
     return JSON.parse(jsonMatch[0])
   } catch (error) {
     throw new Error(`Resume tailoring failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
