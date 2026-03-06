@@ -1,0 +1,16 @@
+{
+  "/_not-found/page": "app/_not-found/page.js",
+  "/api/ai/analyze-resume/route": "app/api/ai/analyze-resume/route.js",
+  "/api/ai/interview-questions/route": "app/api/ai/interview-questions/route.js",
+  "/api/auth/callback/route": "app/api/auth/callback/route.js",
+  "/api/payments/create-order/route": "app/api/payments/create-order/route.js",
+  "/api/payments/verify/route": "app/api/payments/verify/route.js",
+  "/auth/page": "app/auth/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/page": "app/page.js",
+  "/pricing/page": "app/pricing/page.js",
+  "/resume/analyze/page": "app/resume/analyze/page.js",
+  "/resume/interview/page": "app/resume/interview/page.js",
+  "/resume/new/page": "app/resume/new/page.js",
+  "/sitemap.xml/route": "app/sitemap.xml/route.js"
+}
