@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { FileText, Users, Zap, Search, Sun, Moon, DollarSign, Shield } from 'lucide-react'
 import { toast } from 'sonner'
 import { useTheme } from 'next-themes'
@@ -48,7 +47,6 @@ export default function AdminPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/auth'); return }
 
-      // Check admin via API
       const res = await fetch('/api/admin/check', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -89,7 +87,7 @@ export default function AdminPage() {
     try {
       const body: any = { userId: selectedUser.id }
       if (scanAdjust !== '') body.scanAdjust = parseInt(scanAdjust)
-      if (newPlan !== '') body.plan = newPlan
+      if (newPlan !== '' && newPlan !== selectedUser.plan) body.plan = newPlan
 
       const res = await fetch('/api/admin/update-user', {
         method: 'POST',
@@ -98,13 +96,12 @@ export default function AdminPage() {
       })
 
       if (!res.ok) throw new Error('Update failed')
-
       toast.success('User updated successfully')
       setScanAdjust('')
       setNewPlan('')
       setSelectedUser(null)
       await loadData()
-    } catch (err) {
+    } catch {
       toast.error('Failed to update user')
     } finally {
       setSaving(false)
@@ -113,10 +110,10 @@ export default function AdminPage() {
 
   const getPlanColor = (plan: string) => {
     const colors: Record<string, string> = {
-      free: 'bg-slate-100 text-slate-700',
-      starter: 'bg-blue-100 text-blue-700',
-      pro: 'bg-purple-100 text-purple-700',
-      enterprise: 'bg-amber-100 text-amber-700',
+      free: 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300',
+      starter: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+      pro: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',
+      enterprise: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
     }
     return colors[plan] || 'bg-slate-100 text-slate-700'
   }
@@ -136,7 +133,6 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-      {/* Navbar */}
       <nav className="border-b bg-white dark:bg-slate-900 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -144,7 +140,9 @@ export default function AdminPage() {
               <FileText className="h-8 w-8 text-blue-600" />
               <span className="text-xl font-bold">CraftlyCV</span>
             </Link>
-            <Badge className="bg-red-100 text-red-700 border-red-200">Admin</Badge>
+            <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-700 border border-red-200">
+              Admin
+            </span>
           </div>
           <Button
             variant="ghost"
@@ -163,7 +161,7 @@ export default function AdminPage() {
         </h1>
 
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
           <Card>
             <CardContent className="py-5 flex items-center gap-4">
               <div className="p-3 bg-blue-100 dark:bg-blue-900/40 rounded-xl">
@@ -218,16 +216,22 @@ export default function AdminPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
                   {filteredUsers.map((user) => (
                     <div
                       key={user.id}
                       onClick={() => { setSelectedUser(user); setNewPlan(user.plan); setScanAdjust('') }}
-                      className={`p-3 rounded-lg border cursor-pointer transition-all hover:border-blue-300 ${selectedUser?.id === user.id ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30' : 'border-transparent bg-slate-50 dark:bg-slate-800/50'}`}
+                      className={`p-3 rounded-lg border cursor-pointer transition-all hover:border-blue-300 ${
+                        selectedUser?.id === user.id
+                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30'
+                          : 'border-transparent bg-slate-50 dark:bg-slate-800/50'
+                      }`}
                     >
                       <div className="flex items-center justify-between">
                         <div className="min-w-0">
-                          <p className="font-medium text-sm truncate">{user.email || user.id.slice(0, 16) + '...'}</p>
+                          <p className="font-medium text-sm truncate">
+                            {user.email || user.id.slice(0, 20) + '...'}
+                          </p>
                           <p className="text-xs text-muted-foreground">
                             Joined {new Date(user.created_at).toLocaleDateString()}
                           </p>
@@ -262,13 +266,15 @@ export default function AdminPage() {
                   <div className="space-y-4">
                     <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
                       <p className="text-xs text-muted-foreground">Selected user</p>
-                      <p className="font-medium text-sm truncate mt-1">{selectedUser.email || selectedUser.id}</p>
+                      <p className="font-medium text-sm truncate mt-1">
+                        {selectedUser.email || selectedUser.id}
+                      </p>
                       <div className="flex items-center gap-2 mt-2">
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${getPlanColor(selectedUser.plan)}`}>
                           {selectedUser.plan}
                         </span>
-                        <span className="text-xs text-muted-foreground">
-                          <Zap className="h-3 w-3 inline mr-1" />{selectedUser.scans} scans
+                        <span className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Zap className="h-3 w-3" />{selectedUser.scans} scans
                         </span>
                       </div>
                     </div>
@@ -285,7 +291,7 @@ export default function AdminPage() {
                         onChange={(e) => setScanAdjust(e.target.value)}
                       />
                       <p className="text-xs text-muted-foreground mt-1">
-                        Use negative number to deduct. Current: {selectedUser.scans}
+                        Use negative to deduct. Current: {selectedUser.scans}
                         {scanAdjust !== '' && !isNaN(parseInt(scanAdjust)) && (
                           <> → <strong>{Math.max(0, selectedUser.scans + parseInt(scanAdjust))}</strong></>
                         )}
@@ -295,17 +301,16 @@ export default function AdminPage() {
                     {/* Change plan */}
                     <div>
                       <label className="text-sm font-medium mb-1.5 block">Change Plan</label>
-                      <Select value={newPlan} onValueChange={setNewPlan}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select plan" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="free">Free</SelectItem>
-                          <SelectItem value="starter">Starter</SelectItem>
-                          <SelectItem value="pro">Pro</SelectItem>
-                          <SelectItem value="enterprise">Enterprise</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <select
+                        value={newPlan}
+                        onChange={(e) => setNewPlan(e.target.value)}
+                        className="w-full border rounded-md px-3 py-2 text-sm bg-white dark:bg-slate-800 dark:border-slate-700 dark:text-white"
+                      >
+                        <option value="free">Free</option>
+                        <option value="starter">Starter</option>
+                        <option value="pro">Pro</option>
+                        <option value="enterprise">Enterprise</option>
+                      </select>
                     </div>
 
                     <Button
