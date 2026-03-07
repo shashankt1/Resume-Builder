@@ -8,7 +8,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const adminEmail = process.env.ADMIN_EMAIL
+    const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL
     if (!adminEmail) {
       return NextResponse.json({ error: 'Admin not configured' }, { status: 403 })
     }
