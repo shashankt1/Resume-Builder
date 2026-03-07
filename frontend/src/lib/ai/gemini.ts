@@ -25,7 +25,7 @@ export interface ATSAnalysisResult {
 
 export async function analyzeResumeATS(resumeText: string): Promise<ATSAnalysisResult> {
   const genAI = getGenAI()
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-preview-05-20' })
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
   const prompt = `You are an expert ATS (Applicant Tracking System) analyzer. Analyze the following resume and provide a detailed assessment.
 
@@ -83,7 +83,7 @@ export async function generateInterviewQuestions(
   }>
 }> {
   const genAI = getGenAI()
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-preview-05-20' })
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
   const prompt = `Based on this resume${jobTitle ? ` for a ${jobTitle} position` : ''}, generate ${count} interview questions.
 
@@ -128,7 +128,7 @@ export async function tailorResumeToJob(
   matchScore: number
 }> {
   const genAI = getGenAI()
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-preview-05-20' })
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
   const prompt = `You are an expert resume writer. Tailor this resume to match the job description while keeping it authentic and ATS-friendly.
 
