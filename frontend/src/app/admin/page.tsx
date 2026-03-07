@@ -5,7 +5,6 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { FileText, Users, Zap, Search, Sun, Moon, DollarSign, Shield } from 'lucide-react'
 import { toast } from 'sonner'
@@ -18,7 +17,6 @@ interface UserProfile {
   plan: string
   scans: number
   created_at: string
-  resume_updated_at: string | null
 }
 
 interface Stats {
@@ -47,12 +45,18 @@ export default function AdminPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/auth'); return }
 
+      // Send both userId AND email — simpler server-side check
       const res = await fetch('/api/admin/check', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id }),
+        body: JSON.stringify({ userId: user.id, email: user.email }),
       })
-      if (!res.ok) { router.push('/dashboard'); return }
+
+      if (!res.ok) {
+        toast.error('Access denied')
+        router.push('/dashboard')
+        return
+      }
 
       setAuthorized(true)
       await loadData()
@@ -144,12 +148,7 @@ export default function AdminPage() {
               Admin
             </span>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-            className="rounded-full"
-          >
+          <Button variant="ghost" size="icon" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="rounded-full">
             {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
           </Button>
         </div>
@@ -229,20 +228,12 @@ export default function AdminPage() {
                     >
                       <div className="flex items-center justify-between">
                         <div className="min-w-0">
-                          <p className="font-medium text-sm truncate">
-                            {user.email || user.id.slice(0, 20) + '...'}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            Joined {new Date(user.created_at).toLocaleDateString()}
-                          </p>
+                          <p className="font-medium text-sm truncate">{user.email || user.id.slice(0, 20) + '...'}</p>
+                          <p className="text-xs text-muted-foreground">Joined {new Date(user.created_at).toLocaleDateString()}</p>
                         </div>
                         <div className="flex items-center gap-2 shrink-0 ml-2">
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${getPlanColor(user.plan)}`}>
-                            {user.plan}
-                          </span>
-                          <span className="text-xs text-muted-foreground flex items-center gap-1">
-                            <Zap className="h-3 w-3" />{user.scans}
-                          </span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${getPlanColor(user.plan)}`}>{user.plan}</span>
+                          <span className="text-xs text-muted-foreground flex items-center gap-1"><Zap className="h-3 w-3" />{user.scans}</span>
                         </div>
                       </div>
                     </div>
@@ -258,38 +249,22 @@ export default function AdminPage() {
           {/* Edit Panel */}
           <div>
             <Card>
-              <CardHeader>
-                <CardTitle>Edit User</CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle>Edit User</CardTitle></CardHeader>
               <CardContent>
                 {selectedUser ? (
                   <div className="space-y-4">
                     <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
                       <p className="text-xs text-muted-foreground">Selected user</p>
-                      <p className="font-medium text-sm truncate mt-1">
-                        {selectedUser.email || selectedUser.id}
-                      </p>
+                      <p className="font-medium text-sm truncate mt-1">{selectedUser.email || selectedUser.id}</p>
                       <div className="flex items-center gap-2 mt-2">
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${getPlanColor(selectedUser.plan)}`}>
-                          {selectedUser.plan}
-                        </span>
-                        <span className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Zap className="h-3 w-3" />{selectedUser.scans} scans
-                        </span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${getPlanColor(selectedUser.plan)}`}>{selectedUser.plan}</span>
+                        <span className="text-xs text-muted-foreground flex items-center gap-1"><Zap className="h-3 w-3" />{selectedUser.scans} scans</span>
                       </div>
                     </div>
 
-                    {/* Adjust scans */}
                     <div>
-                      <label className="text-sm font-medium mb-1.5 block">
-                        Add / Remove Scans
-                      </label>
-                      <Input
-                        type="number"
-                        placeholder="e.g. 10 or -5"
-                        value={scanAdjust}
-                        onChange={(e) => setScanAdjust(e.target.value)}
-                      />
+                      <label className="text-sm font-medium mb-1.5 block">Add / Remove Scans</label>
+                      <Input type="number" placeholder="e.g. 10 or -5" value={scanAdjust} onChange={(e) => setScanAdjust(e.target.value)} />
                       <p className="text-xs text-muted-foreground mt-1">
                         Use negative to deduct. Current: {selectedUser.scans}
                         {scanAdjust !== '' && !isNaN(parseInt(scanAdjust)) && (
@@ -298,7 +273,6 @@ export default function AdminPage() {
                       </p>
                     </div>
 
-                    {/* Change plan */}
                     <div>
                       <label className="text-sm font-medium mb-1.5 block">Change Plan</label>
                       <select
@@ -313,19 +287,10 @@ export default function AdminPage() {
                       </select>
                     </div>
 
-                    <Button
-                      onClick={saveUserChanges}
-                      disabled={saving || (scanAdjust === '' && newPlan === selectedUser.plan)}
-                      className="w-full"
-                    >
+                    <Button onClick={saveUserChanges} disabled={saving || (scanAdjust === '' && newPlan === selectedUser.plan)} className="w-full">
                       {saving ? 'Saving...' : 'Save Changes'}
                     </Button>
-
-                    <Button
-                      variant="ghost"
-                      className="w-full"
-                      onClick={() => { setSelectedUser(null); setScanAdjust(''); setNewPlan('') }}
-                    >
+                    <Button variant="ghost" className="w-full" onClick={() => { setSelectedUser(null); setScanAdjust(''); setNewPlan('') }}>
                       Cancel
                     </Button>
                   </div>
