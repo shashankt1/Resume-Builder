@@ -8,7 +8,11 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
-import { FileText, ArrowLeft, Target, Loader2, CheckCircle, AlertCircle, Zap, TrendingUp, TrendingDown, Upload, X, Sun, Moon, Sparkles, Download } from 'lucide-react'
+import {
+  FileText, ArrowLeft, Target, Loader2, CheckCircle, AlertCircle,
+  Zap, TrendingUp, TrendingDown, Upload, X, Sun, Moon, Sparkles,
+  FileDown, FileType
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { useTheme } from 'next-themes'
 import { SCAN_COSTS } from '@/lib/plans'
@@ -22,6 +26,12 @@ interface ATSResult {
   summary: string
 }
 
+interface ImproveResult {
+  improvedText: string
+  docxBase64: string
+  pdfHtmlBase64: string
+}
+
 export default function AnalyzePage() {
   const [file, setFile] = useState<File | null>(null)
   const [dragging, setDragging] = useState(false)
@@ -33,9 +43,7 @@ export default function AnalyzePage() {
   const [userId, setUserId] = useState<string | null>(null)
   const [pageLoading, setPageLoading] = useState(true)
   const [improving, setImproving] = useState(false)
-  const [improvedResume, setImprovedResume] = useState<string | null>(null)
-  const [showImproved, setShowImproved] = useState(false)
-  const [extractedText, setExtractedText] = useState<string>('')
+  const [improveResult, setImproveResult] = useState<ImproveResult | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
   const supabase = createClient()
@@ -44,22 +52,11 @@ export default function AnalyzePage() {
   useEffect(() => {
     const checkAuth = async () => {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        router.push('/auth?redirect=/analyze')
-        return
-      }
+      if (!user) { router.push('/auth?redirect=/analyze'); return }
       setUserId(user.id)
-
       const { data: profile } = await supabase
-        .from('profiles')
-        .select('scans, plan')
-        .eq('id', user.id)
-        .single()
-
-      if (profile) {
-        setUserScans(profile.scans ?? 10)
-        setUserPlan(profile.plan ?? 'free')
-      }
+        .from('profiles').select('scans, plan').eq('id', user.id).single()
+      if (profile) { setUserScans(profile.scans ?? 10); setUserPlan(profile.plan ?? 'free') }
       setPageLoading(false)
     }
     checkAuth()
@@ -70,7 +67,7 @@ export default function AnalyzePage() {
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   ]
 
-  const validateFile = (f: File): string => {
+  const validateFile = (f: File) => {
     if (!ACCEPTED_TYPES.includes(f.type)) return 'Only PDF or DOCX files are accepted.'
     if (f.size > 5 * 1024 * 1024) return 'File must be under 5MB.'
     return ''
@@ -79,106 +76,73 @@ export default function AnalyzePage() {
   const handleFile = (f: File) => {
     const err = validateFile(f)
     if (err) { setFileError(err); return }
-    setFileError('')
-    setFile(f)
-    setResult(null)
-    setImprovedResume(null)
-    setShowImproved(false)
-    setExtractedText('')
+    setFileError(''); setFile(f); setResult(null); setImproveResult(null)
   }
 
   const onDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setDragging(false)
+    e.preventDefault(); setDragging(false)
     const f = e.dataTransfer.files[0]
     if (f) handleFile(f)
   }, [])
 
   const analyzeResume = async () => {
     if (!file) { toast.error('Please upload your resume first'); return }
-    if (userScans < SCAN_COSTS.ats_analysis) {
-      toast.error('Not enough scans. Please upgrade your plan.')
-      return
-    }
-
-    setLoading(true)
-    setResult(null)
-    setImprovedResume(null)
-    setShowImproved(false)
-
+    if (userScans < SCAN_COSTS.ats_analysis) { toast.error('Not enough scans.'); return }
+    setLoading(true); setResult(null); setImproveResult(null)
     try {
       const formData = new FormData()
       formData.append('file', file)
       formData.append('userId', userId!)
-
-      const response = await fetch('/api/ai/analyze', {
-        method: 'POST',
-        body: formData,
-      })
-
+      const response = await fetch('/api/ai/analyze', { method: 'POST', body: formData })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || 'Analysis failed')
-
       setResult(data)
-      if (data.extractedText) setExtractedText(data.extractedText)
       setUserScans(prev => prev - SCAN_COSTS.ats_analysis)
       toast.success('Resume analyzed successfully!')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Analysis failed')
-    } finally {
-      setLoading(false)
-    }
+    } finally { setLoading(false) }
   }
 
   const improveResume = async () => {
     if (!result || !file) return
-
-    if (userPlan === 'free' || userPlan === 'starter') {
-      toast.error('Upgrade to Pro to use Resume Improvement')
-      return
-    }
-
-    if (userScans < 2) {
-      toast.error('Not enough scans. Need 2 scans to improve.')
-      return
-    }
-
+    if (!isPro) { toast.error('Upgrade to Pro to use Resume Improvement'); return }
+    if (userScans < 2) { toast.error('Need 2 scans to improve resume'); return }
     setImproving(true)
     try {
       const formData = new FormData()
       formData.append('file', file)
       formData.append('userId', userId!)
       formData.append('improvements', JSON.stringify(result.improvements))
-      formData.append('mode', 'improve')
-
-      const response = await fetch('/api/ai/improve', {
-        method: 'POST',
-        body: formData,
-      })
-
+      const response = await fetch('/api/ai/improve', { method: 'POST', body: formData })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || 'Improvement failed')
-
-      setImprovedResume(data.improvedResume)
+      setImproveResult(data)
       setUserScans(prev => prev - 2)
-      setShowImproved(true)
-      toast.success('Resume improved! Scroll down to see it.')
+      toast.success('Resume improved! Download below.')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Improvement failed')
-    } finally {
-      setImproving(false)
-    }
+    } finally { setImproving(false) }
   }
 
-  const downloadImproved = () => {
-    if (!improvedResume) return
-    const blob = new Blob([improvedResume], { type: 'text/plain' })
+  const downloadDocx = () => {
+    if (!improveResult?.docxBase64) return
+    const bytes = Uint8Array.from(atob(improveResult.docxBase64), c => c.charCodeAt(0))
+    const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })
     const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'improved-resume.txt'
-    a.click()
+    const a = document.createElement('a'); a.href = url; a.download = 'improved-resume.docx'; a.click()
     URL.revokeObjectURL(url)
+  }
+
+  const downloadPdf = () => {
+    if (!improveResult?.pdfHtmlBase64) return
+    const html = atob(improveResult.pdfHtmlBase64)
+    const printWindow = window.open('', '_blank')
+    if (!printWindow) { toast.error('Allow popups to download PDF'); return }
+    printWindow.document.write(html)
+    printWindow.document.close()
+    printWindow.focus()
+    setTimeout(() => { printWindow.print() }, 500)
   }
 
   const getScoreColor = (score: number) => score >= 80 ? 'text-green-600' : score >= 60 ? 'text-yellow-600' : 'text-red-600'
@@ -198,24 +162,12 @@ export default function AnalyzePage() {
             <div className="flex items-center space-x-3">
               <div className="flex items-center space-x-2 bg-blue-50 dark:bg-blue-950 px-4 py-2 rounded-full">
                 <Zap className="h-4 w-4 text-blue-600" />
-                <span className="text-sm font-medium text-blue-600">
-                  {pageLoading ? '...' : userScans} scans
-                </span>
+                <span className="text-sm font-medium text-blue-600">{pageLoading ? '...' : userScans} scans</span>
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                className="rounded-full"
-                title="Toggle theme"
-              >
+              <Button variant="ghost" size="icon" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="rounded-full">
                 {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
               </Button>
-              <Link href="/dashboard">
-                <Button variant="ghost">
-                  <ArrowLeft className="mr-2 h-4 w-4" /> Dashboard
-                </Button>
-              </Link>
+              <Link href="/dashboard"><Button variant="ghost"><ArrowLeft className="mr-2 h-4 w-4" /> Dashboard</Button></Link>
             </div>
           </div>
         </div>
@@ -248,32 +200,18 @@ export default function AnalyzePage() {
                 className={[
                   'border-2 border-dashed rounded-xl p-10 text-center transition-all',
                   dragging ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30' : '',
-                  file
-                    ? 'border-green-400 bg-green-50 dark:bg-green-950/20 cursor-default'
+                  file ? 'border-green-400 bg-green-50 dark:bg-green-950/20 cursor-default'
                     : 'border-slate-200 dark:border-slate-700 hover:border-blue-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer'
                 ].join(' ')}
               >
-                <input
-                  ref={inputRef}
-                  type="file"
-                  accept=".pdf,.docx"
-                  className="hidden"
-                  onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
-                />
+                <input ref={inputRef} type="file" accept=".pdf,.docx" className="hidden"
+                  onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} />
                 {!file ? (
                   <>
                     <Upload className="h-12 w-12 mx-auto mb-4 text-slate-300 dark:text-slate-600" />
-                    <p className="text-base font-semibold mb-1">
-                      {dragging ? 'Drop it here!' : 'Drag & drop your resume'}
-                    </p>
+                    <p className="text-base font-semibold mb-1">{dragging ? 'Drop it here!' : 'Drag & drop your resume'}</p>
                     <p className="text-sm text-muted-foreground mb-4">PDF or DOCX · Max 5MB</p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={(e) => { e.stopPropagation(); inputRef.current?.click() }}
-                    >
-                      Browse files
-                    </Button>
+                    <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); inputRef.current?.click() }}>Browse files</Button>
                   </>
                 ) : (
                   <div className="flex items-center gap-4 text-left">
@@ -288,12 +226,9 @@ export default function AnalyzePage() {
                         <span className="text-xs text-green-600 font-medium">Ready to analyze</span>
                       </div>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
+                    <Button variant="ghost" size="icon"
                       className="shrink-0 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950/30"
-                      onClick={(e) => { e.stopPropagation(); setFile(null); setResult(null); setImprovedResume(null) }}
-                    >
+                      onClick={(e) => { e.stopPropagation(); setFile(null); setResult(null); setImproveResult(null) }}>
                       <X className="h-4 w-4" />
                     </Button>
                   </div>
@@ -306,23 +241,14 @@ export default function AnalyzePage() {
                 </p>
               )}
 
-              <Button
-                onClick={analyzeResume}
-                disabled={loading || !file || userScans < SCAN_COSTS.ats_analysis}
-                className="w-full mt-4"
-                size="lg"
-              >
-                {loading ? (
-                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Analyzing...</>
-                ) : (
-                  <><Target className="mr-2 h-4 w-4" /> Analyze Resume ({SCAN_COSTS.ats_analysis} scan)</>
-                )}
+              <Button onClick={analyzeResume} disabled={loading || !file || userScans < SCAN_COSTS.ats_analysis} className="w-full mt-4" size="lg">
+                {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Analyzing...</>
+                  : <><Target className="mr-2 h-4 w-4" /> Analyze Resume ({SCAN_COSTS.ats_analysis} scan)</>}
               </Button>
 
               {!pageLoading && userScans < SCAN_COSTS.ats_analysis && (
                 <p className="text-red-500 text-sm mt-2 text-center">
-                  Not enough scans.{' '}
-                  <Link href="/pricing" className="underline font-medium">Upgrade now</Link>
+                  Not enough scans. <Link href="/pricing" className="underline font-medium">Upgrade now</Link>
                 </p>
               )}
             </CardContent>
@@ -374,9 +300,7 @@ export default function AnalyzePage() {
 
                 <Card>
                   <CardHeader>
-                    <CardTitle className="flex items-center text-green-600">
-                      <CheckCircle className="mr-2 h-5 w-5" /> Strengths
-                    </CardTitle>
+                    <CardTitle className="flex items-center text-green-600"><CheckCircle className="mr-2 h-5 w-5" /> Strengths</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <ul className="space-y-2">
@@ -392,9 +316,7 @@ export default function AnalyzePage() {
 
                 <Card>
                   <CardHeader>
-                    <CardTitle className="flex items-center text-yellow-600">
-                      <AlertCircle className="mr-2 h-5 w-5" /> Improvements
-                    </CardTitle>
+                    <CardTitle className="flex items-center text-yellow-600"><AlertCircle className="mr-2 h-5 w-5" /> Improvements</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <ul className="space-y-2">
@@ -408,40 +330,48 @@ export default function AnalyzePage() {
                   </CardContent>
                 </Card>
 
-                {/* Improve My Resume Button */}
-                <Card className="border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-950/20">
+                {/* Improve My Resume Card */}
+                <Card className="border-purple-200 dark:border-purple-800 bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-950/30 dark:to-indigo-950/30">
                   <CardContent className="py-5">
-                    <div className="flex items-center justify-between gap-4">
-                      <div>
-                        <p className="font-semibold text-purple-700 dark:text-purple-300 flex items-center gap-2">
-                          <Sparkles className="h-4 w-4" /> Improve My Resume
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {isPro
-                            ? 'AI rewrites your resume applying all the improvements above · 2 scans'
-                            : 'Pro plan required · upgrade to unlock'}
-                        </p>
-                      </div>
-                      {isPro ? (
-                        <Button
-                          onClick={improveResume}
-                          disabled={improving || userScans < 2}
-                          className="bg-purple-600 hover:bg-purple-700 text-white shrink-0"
-                        >
-                          {improving ? (
-                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Improving...</>
-                          ) : (
-                            <><Sparkles className="mr-2 h-4 w-4" /> Improve (2 scans)</>
-                          )}
+                    <p className="font-semibold text-purple-700 dark:text-purple-300 flex items-center gap-2 mb-1">
+                      <Sparkles className="h-4 w-4" /> Improve My Resume
+                    </p>
+                    <p className="text-xs text-muted-foreground mb-4">
+                      {isPro
+                        ? 'AI rewrites your resume applying all improvements above. Download as PDF or DOCX. · 2 scans'
+                        : 'Pro plan required — AI rewrites your full resume and lets you download as PDF or DOCX'}
+                    </p>
+
+                    {improveResult ? (
+                      /* Download buttons after improvement */
+                      <div className="flex gap-3 flex-wrap">
+                        <Button onClick={downloadPdf} className="bg-red-600 hover:bg-red-700 text-white flex-1">
+                          <FileDown className="mr-2 h-4 w-4" /> Download PDF
                         </Button>
-                      ) : (
-                        <Link href="/pricing">
-                          <Button className="bg-purple-600 hover:bg-purple-700 text-white shrink-0">
-                            Upgrade to Pro
-                          </Button>
-                        </Link>
-                      )}
-                    </div>
+                        <Button onClick={downloadDocx} className="bg-blue-600 hover:bg-blue-700 text-white flex-1">
+                          <FileType className="mr-2 h-4 w-4" /> Download DOCX
+                        </Button>
+                      </div>
+                    ) : isPro ? (
+                      <Button onClick={improveResume} disabled={improving || userScans < 2}
+                        className="w-full bg-purple-600 hover:bg-purple-700 text-white">
+                        {improving
+                          ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Improving your resume...</>
+                          : <><Sparkles className="mr-2 h-4 w-4" /> Improve & Download (2 scans)</>}
+                      </Button>
+                    ) : (
+                      <Link href="/pricing">
+                        <Button className="w-full bg-purple-600 hover:bg-purple-700 text-white">
+                          Upgrade to Pro to Unlock
+                        </Button>
+                      </Link>
+                    )}
+
+                    {improveResult && (
+                      <p className="text-xs text-center text-muted-foreground mt-2">
+                        PDF opens print dialog — press Ctrl+P → Save as PDF
+                      </p>
+                    )}
                   </CardContent>
                 </Card>
               </>
@@ -456,30 +386,6 @@ export default function AnalyzePage() {
             )}
           </div>
         </div>
-
-        {/* Improved Resume Section */}
-        {showImproved && improvedResume && (
-          <div className="mt-8">
-            <Card className="border-purple-300 dark:border-purple-700">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center text-purple-600 dark:text-purple-400">
-                    <Sparkles className="mr-2 h-5 w-5" /> Your Improved Resume
-                  </CardTitle>
-                  <Button onClick={downloadImproved} variant="outline" size="sm" className="border-purple-300 text-purple-600 hover:bg-purple-50">
-                    <Download className="mr-2 h-4 w-4" /> Download .txt
-                  </Button>
-                </div>
-                <CardDescription>AI-rewritten version incorporating all suggested improvements</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <pre className="whitespace-pre-wrap text-sm bg-slate-50 dark:bg-slate-900 p-4 rounded-lg border max-h-[600px] overflow-y-auto font-mono leading-relaxed">
-                  {improvedResume}
-                </pre>
-              </CardContent>
-            </Card>
-          </div>
-        )}
       </div>
     </div>
   )
