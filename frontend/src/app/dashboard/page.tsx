@@ -18,9 +18,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { FileText, Target, Sparkles, MessageSquare, Zap, LogOut, Settings, CreditCard, Share2, Clock } from 'lucide-react'
+import { FileText, Target, Sparkles, MessageSquare, Zap, LogOut, CreditCard, Share2, Clock, Sun, Moon, Shield } from 'lucide-react'
 import { toast } from 'sonner'
-import { PLANS, SCAN_COSTS, type PlanId } from '@/lib/plans'
+import { useTheme } from 'next-themes'
+import { PLANS, type PlanId } from '@/lib/plans'
 import { formatTimeAgo } from '@/lib/utils'
 
 interface Profile {
@@ -44,38 +45,30 @@ export default function DashboardPage() {
   const [activities, setActivities] = useState<Activity[]>([])
   const [loading, setLoading] = useState(true)
   const [user, setUser] = useState<any>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
   const router = useRouter()
   const supabase = createClient()
+  const { theme, setTheme } = useTheme()
 
   useEffect(() => {
     const loadData = async () => {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        router.push('/auth')
-        return
-      }
+      if (!user) { router.push('/auth'); return }
       setUser(user)
 
-      // Get profile
       const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single()
+        .from('profiles').select('*').eq('id', user.id).single()
 
-      if (!profile) {
-        router.push('/onboarding')
-        return
-      }
+      if (!profile) { router.push('/onboarding'); return }
       setProfile(profile)
 
-      // Get recent activities
+      // Check if admin
+      const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL
+      if (adminEmail && user.email === adminEmail) setIsAdmin(true)
+
       const { data: activities } = await supabase
-        .from('scan_logs')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(5)
+        .from('scan_logs').select('*').eq('user_id', user.id)
+        .order('created_at', { ascending: false }).limit(5)
 
       setActivities(activities || [])
       setLoading(false)
@@ -98,6 +91,7 @@ export default function DashboardPage() {
   const getActionLabel = (action: string) => {
     const labels: Record<string, string> = {
       ats_analysis: 'ATS Resume Analysis',
+      improve_resume: 'Resume Improvement',
       tailor_to_job: 'Tailored Resume',
       interview_prep: 'Interview Prep Session',
       linkedin_optimizer: 'LinkedIn Optimization',
@@ -132,7 +126,6 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-      {/* Navigation */}
       <nav className="border-b bg-white dark:bg-slate-900 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
@@ -141,14 +134,22 @@ export default function DashboardPage() {
               <span className="text-xl font-bold">CraftlyCV</span>
             </Link>
 
-            <div className="flex items-center space-x-4">
-              {/* Scans Counter */}
+            <div className="flex items-center space-x-3">
               <div className="hidden sm:flex items-center space-x-2 bg-blue-50 dark:bg-blue-950 px-4 py-2 rounded-full">
                 <Zap className="h-4 w-4 text-blue-600" />
-                <span className="text-sm font-medium text-blue-600">
-                  {profile?.scans || 0} scans
-                </span>
+                <span className="text-sm font-medium text-blue-600">{profile?.scans || 0} scans</span>
               </div>
+
+              {/* Dark/Light toggle */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                className="rounded-full"
+                title="Toggle theme"
+              >
+                {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+              </Button>
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -163,9 +164,9 @@ export default function DashboardPage() {
                   <DropdownMenuLabel>
                     <div className="flex flex-col space-y-1">
                       <p className="text-sm font-medium">{user?.email}</p>
-                      <div className="flex items-center">
+                      <div className="flex items-center gap-2">
                         <Badge variant="secondary" className="text-xs">{plan.name}</Badge>
-                        <span className="ml-2 text-xs text-muted-foreground">{profile?.scans} scans left</span>
+                        <span className="text-xs text-muted-foreground">{profile?.scans} scans left</span>
                       </div>
                     </div>
                   </DropdownMenuLabel>
@@ -176,6 +177,16 @@ export default function DashboardPage() {
                   <DropdownMenuItem onClick={copyReferralLink}>
                     <Share2 className="mr-2 h-4 w-4" /> Copy Referral Link
                   </DropdownMenuItem>
+                  {isAdmin && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem asChild>
+                        <Link href="/admin" className="text-purple-600 dark:text-purple-400">
+                          <Shield className="mr-2 h-4 w-4" /> Admin Panel
+                        </Link>
+                      </DropdownMenuItem>
+                    </>
+                  )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleSignOut} className="text-red-600">
                     <LogOut className="mr-2 h-4 w-4" /> Sign Out
@@ -187,14 +198,12 @@ export default function DashboardPage() {
         </div>
       </nav>
 
-      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <h1 className="text-2xl font-bold">Welcome back!</h1>
           <p className="text-muted-foreground">Your AI-powered resume toolkit</p>
         </div>
 
-        {/* Scans Card */}
         <Card className="mb-8 bg-gradient-to-r from-blue-600 to-purple-600 text-white border-0">
           <CardContent className="py-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -212,7 +221,6 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Quick Actions */}
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           <Link href="/analyze">
             <Card className="hover:border-blue-300 hover:shadow-md transition-all cursor-pointer h-full">
@@ -280,7 +288,6 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        {/* Recent Activity */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
