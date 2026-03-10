@@ -22,6 +22,7 @@ type Stage = 'setup' | 'questions' | 'done'
 export default function InterviewPage() {
   const [file, setFile] = useState<File | null>(null)
   const [jobTitle, setJobTitle] = useState('')
+  const [jobDescription, setJobDescription] = useState('')
   const [loading, setLoading] = useState(false)
   const [stage, setStage] = useState<Stage>('setup')
   const [questions, setQuestions] = useState<Question[]>([])
@@ -37,7 +38,6 @@ export default function InterviewPage() {
   const supabase = createClient()
   const { theme, setTheme } = useTheme()
 
-  // Voice recognition
   const [listening, setListening] = useState(false)
   const recognitionRef = useRef<any>(null)
 
@@ -78,6 +78,7 @@ export default function InterviewPage() {
       formData.append('file', file)
       formData.append('userId', userId!)
       formData.append('jobTitle', jobTitle)
+      if (jobDescription.trim()) formData.append('jobDescription', jobDescription)
       const res = await fetch('/api/ai/interview', { method: 'POST', body: formData })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
@@ -91,9 +92,7 @@ export default function InterviewPage() {
   }
 
   const toggleVoice = () => {
-    if (listening) {
-      recognitionRef.current?.stop(); setListening(false); return
-    }
+    if (listening) { recognitionRef.current?.stop(); setListening(false); return }
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     if (!SpeechRecognition) { toast.error('Voice not supported in this browser'); return }
     const recognition = new SpeechRecognition()
@@ -153,13 +152,13 @@ export default function InterviewPage() {
           <div className="p-2 bg-green-100 dark:bg-green-900 rounded-lg"><MessageSquare className="h-6 w-6 text-green-600" /></div>
           <div>
             <h1 className="text-2xl font-bold">Interview Prep</h1>
-            <p className="text-muted-foreground">AI-generated questions with real-time feedback · 5 scans</p>
+            <p className="text-muted-foreground">AI-generated questions tailored to your resume & JD · 5 scans</p>
           </div>
         </div>
 
-        {/* Setup Stage */}
         {stage === 'setup' && (
           <div className="space-y-4">
+            {/* Resume Upload */}
             <Card>
               <CardHeader><CardTitle>Your Resume</CardTitle><CardDescription>PDF or DOCX, max 5MB</CardDescription></CardHeader>
               <CardContent>
@@ -182,20 +181,49 @@ export default function InterviewPage() {
               </CardContent>
             </Card>
 
+            {/* Job Title */}
             <Card>
               <CardHeader><CardTitle>Job Title</CardTitle><CardDescription>What role are you interviewing for?</CardDescription></CardHeader>
               <CardContent>
-                <Input placeholder="e.g. Frontend Developer, Data Analyst, Product Manager" value={jobTitle} onChange={e => setJobTitle(e.target.value)} />
+                <Input
+                  placeholder="e.g. Frontend Developer, Data Analyst, Product Manager"
+                  value={jobTitle}
+                  onChange={e => setJobTitle(e.target.value)}
+                />
               </CardContent>
             </Card>
 
-            <Button onClick={generateQuestions} disabled={loading || !file || !jobTitle.trim() || userScans < 5} className="w-full bg-green-600 hover:bg-green-700 text-white" size="lg">
-              {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Generating questions...</> : <><MessageSquare className="mr-2 h-4 w-4" />Generate 10 Questions (5 scans)</>}
+            {/* Job Description — NEW */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Job Description <span className="text-muted-foreground text-sm font-normal">(optional but recommended)</span></CardTitle>
+                <CardDescription>Paste the JD to get questions tailored to exactly what this company is looking for</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Textarea
+                  placeholder={"Paste the job description here...\n\nExample:\nWe are looking for a Senior Data Analyst with experience in SQL, Python, Tableau...\n• 3+ years of experience\n• Strong communication skills\n• Experience with A/B testing..."}
+                  value={jobDescription}
+                  onChange={e => setJobDescription(e.target.value)}
+                  className="min-h-[160px] resize-none text-sm"
+                />
+                <p className="text-xs text-muted-foreground mt-2">{jobDescription.length} characters · More detail = more targeted questions</p>
+              </CardContent>
+            </Card>
+
+            <Button
+              onClick={generateQuestions}
+              disabled={loading || !file || !jobTitle.trim() || userScans < 5}
+              className="w-full bg-green-600 hover:bg-green-700 text-white"
+              size="lg"
+            >
+              {loading
+                ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Generating questions...</>
+                : <><MessageSquare className="mr-2 h-4 w-4" />Generate 10 Questions (5 scans)</>
+              }
             </Button>
           </div>
         )}
 
-        {/* Questions Stage */}
         {stage === 'questions' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between mb-2">
@@ -247,7 +275,6 @@ export default function InterviewPage() {
           </div>
         )}
 
-        {/* Done Stage */}
         {stage === 'done' && (
           <div className="space-y-4">
             <Card className="bg-gradient-to-br from-green-50 to-blue-50 dark:from-green-950/30 dark:to-blue-950/30 border-green-200">
