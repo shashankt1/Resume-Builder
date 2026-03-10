@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import {
   FileText, Zap, Target, Sparkles, MessageSquare, ArrowRight,
   CheckCircle, TrendingUp, Award, ChevronDown, Menu, X,
@@ -256,9 +257,7 @@ export default function HomePage() {
         <nav className="sticky top-0 z-50 border-b border-white/6 bg-[#060c1a]/80 backdrop-blur-xl">
           <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
             <Link href="/" className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-lg shadow-blue-500/20">
-                <FileText className="h-5 w-5 text-white" />
-              </div>
+              <Image src="/logo.svg" alt="CraftlyCV" width={36} height={36} className="rounded-xl" />
               <span className="text-xl font-black text-white">CraftlyCV</span>
             </Link>
             <div className="hidden md:flex items-center gap-2">
@@ -514,10 +513,8 @@ export default function HomePage() {
         <footer className="border-t border-white/6 py-12 px-4">
           <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center">
-                <FileText className="h-4 w-4 text-white" />
-              </div>
-              <span className="text-lg font-black text-white">CraftlyCV</span>
+              <Image src="/logo.svg" alt="CraftlyCV" width={36} height={36} className="rounded-xl" />
+              <span className="text-xl font-black text-white">CraftlyCV</span>
             </div>
             <div className="flex items-center gap-6 text-sm text-white/30">
               <Link href="/pricing" className="hover:text-white transition-colors">Pricing</Link>
