@@ -16,6 +16,7 @@ export async function POST(request: NextRequest) {
     const file = formData.get('file') as File | null
     const userId = formData.get('userId') as string
     const jobTitle = formData.get('jobTitle') as string
+    const jobDescription = formData.get('jobDescription') as string || ''
 
     if (!file || !userId || !jobTitle) {
       return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
@@ -28,28 +29,34 @@ export async function POST(request: NextRequest) {
     }
 
     const resumeText = await extractText(file)
-    const apiKey = process.env.GEMINI_API_KEY!
-    const genAI = new GoogleGenerativeAI(apiKey)
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
-    const prompt = `You are an expert interviewer. Based on this resume and the job title "${jobTitle}", generate exactly 10 interview questions.
+    const jdSection = jobDescription.trim()
+      ? `\nJOB DESCRIPTION:\n${jobDescription}\n\nUse the job description to make questions highly specific to what this company is looking for. Mirror their language and requirements.`
+      : ''
+
+    const prompt = `You are an expert interviewer at a top tech company. Based on the resume and job details below, generate exactly 10 interview questions that are highly tailored and realistic.
 
 RESUME:
 ${resumeText}
 
+JOB TITLE: ${jobTitle}${jdSection}
+
 Generate a mix of:
-- 3 behavioral questions (STAR format)
-- 3 technical/role-specific questions  
-- 2 situational questions
-- 1 strengths/weakness question
-- 1 career goals question
+- 3 behavioral questions (STAR format, based on candidate's actual experience)
+- 3 technical/role-specific questions (based on job requirements and resume skills)
+- 2 situational questions (realistic scenarios for this role)
+- 1 strengths/weakness question (relevant to this job)
+- 1 career goals question (connecting their background to this role)
+
+Make questions specific — reference actual technologies, experiences, or requirements from the resume and JD. Do NOT generate generic questions.
 
 Respond ONLY with valid JSON in this exact format:
 {
   "questions": [
-    {"question": "Tell me about yourself", "category": "General", "difficulty": "Easy"},
-    {"question": "...", "category": "Technical", "difficulty": "Medium"},
-    {"question": "...", "category": "Behavioral", "difficulty": "Hard"}
+    {"question": "Tell me about a time you...", "category": "Behavioral", "difficulty": "Medium"},
+    {"question": "...", "category": "Technical", "difficulty": "Hard"}
   ]
 }
 Difficulty must be exactly "Easy", "Medium", or "Hard".`
@@ -59,7 +66,9 @@ Difficulty must be exactly "Easy", "Medium", or "Hard".`
     const parsed = JSON.parse(raw)
 
     await supabase.from('profiles').update({ scans: profile.scans - 5 }).eq('id', userId)
-    await supabase.from('scan_logs').insert({ user_id: userId, action_type: 'interview_prep', scans_used: 5, created_at: new Date().toISOString() })
+    await supabase.from('scan_logs').insert({
+      user_id: userId, action_type: 'interview_prep', scans_used: 5, created_at: new Date().toISOString()
+    })
 
     return NextResponse.json(parsed)
   } catch (error) {
