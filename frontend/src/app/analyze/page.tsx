@@ -355,10 +355,8 @@ export default function AnalyzePage() {
         <nav className="border-b border-white/8 bg-white/3 backdrop-blur-md sticky top-0 z-50">
           <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
             <Link href="/dashboard" className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center">
-                <FileText className="h-4 w-4 text-white" />
-              </div>
-              <span className="text-xl font-bold text-white">CraftlyCV</span>
+              <Image src="/logo.svg" alt="CraftlyCV" width={36} height={36} className="rounded-xl" />
+              <span className="text-xl font-black text-white">CraftlyCV</span>
             </Link>
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 px-4 py-2 rounded-full">
@@ -477,10 +475,8 @@ export default function AnalyzePage() {
         <nav className="border-b border-white/8 bg-white/3 backdrop-blur-md sticky top-0 z-50">
           <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
             <Link href="/dashboard" className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center">
-                <FileText className="h-4 w-4 text-white" />
-              </div>
-              <span className="text-xl font-bold text-white">CraftlyCV</span>
+              <Image src="/logo.svg" alt="CraftlyCV" width={36} height={36} className="rounded-xl" />
+              <span className="text-xl font-black text-white">CraftlyCV</span>
             </Link>
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 px-4 py-2 rounded-full">
