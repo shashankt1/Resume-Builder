@@ -56,6 +56,13 @@ export default function PricingPage() {
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => setUser(user))
+    if (!document.getElementById('razorpay-script')) {
+      const script = document.createElement('script')
+      script.id = 'razorpay-script'
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+      script.async = true
+      document.body.appendChild(script)
+    }
   }, [])
 
   const handlePurchase = async (planId: string, amount: number) => {
@@ -70,9 +77,10 @@ export default function PricingPage() {
       if (!res.ok) throw new Error(order.error)
 
       const win = window as any
+      if (!win.Razorpay) { toast.error('Payment gateway not loaded. Please refresh.'); setLoading(null); return }
       const rzp = new win.Razorpay({
-        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
-        amount: order.amount, currency: 'INR', order_id: order.id,
+        key: order.keyId || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+        amount: order.amount, currency: order.currency || 'INR', order_id: order.orderId,
         name: 'CraftlyCV', description: `${planId} Plan`,
         handler: async (response: any) => {
           const verify = await fetch('/api/payment/verify', {
