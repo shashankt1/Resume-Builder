@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { FileText, ArrowLeft, Loader2, Zap, Sun, Moon, CheckCircle, AlertCircle, TrendingUp, Linkedin } from 'lucide-react'
+import { FileText, ArrowLeft, Loader2, Zap, Sun, Moon, CheckCircle, AlertCircle, TrendingUp, Linkedin, Upload, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { useTheme } from 'next-themes'
 
@@ -22,12 +22,18 @@ interface LinkedInResult {
   keywordsMissing: string[]
 }
 
+type InputMode = 'paste' | 'upload'
+
 export default function LinkedInPage() {
+  const [inputMode, setInputMode] = useState<InputMode>('paste')
   const [profileText, setProfileText] = useState('')
+  const [file, setFile] = useState<File | null>(null)
+  const [dragging, setDragging] = useState(false)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<LinkedInResult | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
   const [userScans, setUserScans] = useState(0)
+  const inputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
   const supabase = createClient()
   const { theme, setTheme } = useTheme()
@@ -43,16 +49,37 @@ export default function LinkedInPage() {
     check()
   }, [])
 
+  const handleFile = (f: File) => {
+    if (f.type !== 'application/pdf') { toast.error('Only PDF files allowed'); return }
+    if (f.size > 5 * 1024 * 1024) { toast.error('File too large (max 5MB)'); return }
+    setFile(f)
+  }
+
+  const onDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault(); setDragging(false)
+    if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0])
+  }, [])
+
+  const canAnalyze = inputMode === 'paste' ? profileText.length >= 100 : !!file
+
   const analyze = async () => {
-    if (!profileText.trim() || profileText.length < 100) { toast.error('Paste more LinkedIn profile content (at least 100 characters)'); return }
+    if (!canAnalyze) { toast.error(inputMode === 'paste' ? 'Paste at least 100 characters' : 'Upload a PDF'); return }
     if (userScans < 2) { toast.error('Need 2 scans'); return }
     setLoading(true)
     try {
-      const res = await fetch('/api/ai/linkedin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ profileText, userId }),
-      })
+      let res: Response
+      if (inputMode === 'upload' && file) {
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('userId', userId!)
+        res = await fetch('/api/ai/linkedin', { method: 'POST', body: formData })
+      } else {
+        res = await fetch('/api/ai/linkedin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ profileText, userId }),
+        })
+      }
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setResult(data)
@@ -96,33 +123,85 @@ export default function LinkedInPage() {
 
         <div className="grid lg:grid-cols-2 gap-6">
           <div className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Paste Your LinkedIn Profile</CardTitle>
-                <CardDescription>
-                  Go to your LinkedIn profile → copy your Headline, About, and top 2-3 Experience entries → paste below
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800 rounded-lg p-3 mb-3 text-sm text-sky-700 dark:text-sky-300">
-                  <p className="font-medium mb-1">How to copy your LinkedIn profile:</p>
-                  <ol className="list-decimal ml-4 space-y-1">
-                    <li>Open your LinkedIn profile in browser</li>
-                    <li>Select all text from Headline to Experience</li>
-                    <li>Copy (Ctrl+A, Ctrl+C) and paste below</li>
-                  </ol>
-                </div>
-                <Textarea
-                  placeholder="Paste your LinkedIn profile text here...&#10;&#10;Example:&#10;John Doe&#10;Senior Software Engineer at Google | Building the future&#10;&#10;About&#10;Passionate software engineer with 5+ years..."
-                  value={profileText}
-                  onChange={e => setProfileText(e.target.value)}
-                  className="min-h-[280px] resize-none font-mono text-sm"
-                />
-                <p className="text-xs text-muted-foreground mt-2">{profileText.length} characters (min 100)</p>
-              </CardContent>
-            </Card>
 
-            <Button onClick={analyze} disabled={loading || profileText.length < 100 || userScans < 2} className="w-full bg-sky-600 hover:bg-sky-700 text-white" size="lg">
+            {/* Toggle */}
+            <div className="flex rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden p-1 bg-slate-100 dark:bg-slate-800 gap-1">
+              <button
+                onClick={() => setInputMode('paste')}
+                className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all ${inputMode === 'paste' ? 'bg-white dark:bg-slate-900 shadow text-sky-600' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                📋 Paste Text
+              </button>
+              <button
+                onClick={() => setInputMode('upload')}
+                className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all ${inputMode === 'upload' ? 'bg-white dark:bg-slate-900 shadow text-sky-600' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                📄 Upload PDF
+              </button>
+            </div>
+
+            {inputMode === 'paste' ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Paste Your LinkedIn Profile</CardTitle>
+                  <CardDescription>Go to your LinkedIn profile → copy your Headline, About, and top 2-3 Experience entries → paste below</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800 rounded-lg p-3 mb-3 text-sm text-sky-700 dark:text-sky-300">
+                    <p className="font-medium mb-1">How to copy your LinkedIn profile:</p>
+                    <ol className="list-decimal ml-4 space-y-1">
+                      <li>Open your LinkedIn profile in browser</li>
+                      <li>Select all text from Headline to Experience</li>
+                      <li>Copy (Ctrl+A, Ctrl+C) and paste below</li>
+                    </ol>
+                  </div>
+                  <Textarea
+                    placeholder={"Paste your LinkedIn profile text here...\n\nExample:\nJohn Doe\nSenior Software Engineer at Google | Building the future\n\nAbout\nPassionate software engineer with 5+ years..."}
+                    value={profileText}
+                    onChange={e => setProfileText(e.target.value)}
+                    className="min-h-[240px] resize-none font-mono text-sm"
+                  />
+                  <p className="text-xs text-muted-foreground mt-2">{profileText.length} characters (min 100)</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Upload LinkedIn PDF</CardTitle>
+                  <CardDescription>Export your LinkedIn profile as PDF and upload it here</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800 rounded-lg p-3 mb-4 text-sm text-sky-700 dark:text-sky-300">
+                    <p className="font-medium mb-1">How to export LinkedIn as PDF:</p>
+                    <ol className="list-decimal ml-4 space-y-1">
+                      <li>Go to your LinkedIn profile</li>
+                      <li>Click "More" → "Save to PDF"</li>
+                      <li>Upload the downloaded PDF below</li>
+                    </ol>
+                  </div>
+                  <div
+                    onDrop={onDrop}
+                    onDragOver={e => { e.preventDefault(); setDragging(true) }}
+                    onDragLeave={() => setDragging(false)}
+                    onClick={() => !file && inputRef.current?.click()}
+                    className={`border-2 border-dashed rounded-xl p-8 text-center transition-all ${dragging ? 'border-sky-500 bg-sky-50 dark:bg-sky-950/30' : file ? 'border-sky-400 bg-sky-50 dark:bg-sky-950/20 cursor-default' : 'border-slate-200 dark:border-slate-700 hover:border-sky-400 cursor-pointer'}`}
+                  >
+                    <input ref={inputRef} type="file" accept=".pdf" className="hidden" onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
+                    {file ? (
+                      <div className="flex items-center gap-3 text-left">
+                        <FileText className="h-6 w-6 text-sky-600" />
+                        <span className="flex-1 text-sm font-medium truncate">{file.name}</span>
+                        <Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); setFile(null) }}><X className="h-4 w-4" /></Button>
+                      </div>
+                    ) : (
+                      <><Upload className="h-10 w-10 mx-auto mb-3 text-slate-300" /><p className="font-medium">Upload LinkedIn PDF</p><p className="text-sm text-muted-foreground">PDF only · max 5MB</p></>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            <Button onClick={analyze} disabled={loading || !canAnalyze || userScans < 2} className="w-full bg-sky-600 hover:bg-sky-700 text-white" size="lg">
               {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Analyzing...</> : <><Linkedin className="mr-2 h-4 w-4" />Analyze Profile (2 scans)</>}
             </Button>
           </div>
