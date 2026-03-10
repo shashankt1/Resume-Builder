@@ -7,8 +7,8 @@ import Link from 'next/link'
 import { useTheme } from 'next-themes'
 import { toast } from 'sonner'
 import {
-  FileText, Zap, Sun, Moon, Plus, Trash2, Sparkles, ChevronDown,
-  ChevronUp, ArrowRight, ArrowLeft, Download, Loader2, Lock,
+  FileText, Zap, Sun, Moon, Plus, Trash2, Sparkles,
+  ArrowRight, ArrowLeft, Download, Loader2, Lock, Target,
   CheckCircle, User, Briefcase, GraduationCap, Code2, Award, Eye
 } from 'lucide-react'
 
